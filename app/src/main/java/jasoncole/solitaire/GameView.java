@@ -36,17 +36,21 @@ public class GameView extends SurfaceView implements Runnable {
     private Deck deck;
     private Card hand;
 
+    private static LinkedList<Card> cards;
+
     public GameView(Context context) {
         super(context);
 
         fontPaint = new Paint();
         fontPaint.setTextSize(50);
         fontPaint.setColor(Color.RED);
+        fontPaint.setStrokeWidth(5);
+        fontPaint.setStyle(Paint.Style.STROKE);
 
         int screenWidth = Resources.getSystem().getDisplayMetrics().widthPixels;
         int screenHeight = Resources.getSystem().getDisplayMetrics().heightPixels;
         Card.initCards(context);
-
+        cards = new LinkedList<Card>();
         int sideBuffer = (int)(height/20);
 
         bottomRow = new Card[8];
@@ -55,11 +59,10 @@ public class GameView extends SurfaceView implements Runnable {
             Log.d("nothing", (int)(height / 10.0) + "");
             bottomRow[i].debug_name = "" + i + " of " + bottomRow[i].getSuit().name();
 
-            for(int j = 0; j <= i+1; j++) {
+            for(int j = 0; j < i+1; j++) {
                 Card card = new Card(Card.RED, j+i, Suit.Diamonds);
                 bottomRow[i].addCard(card);
-
-//                Log.d("Offset", card.debug_name + " " + card.getOffX() + card.getOffY());
+                cards.add(card);
                 if (j == i)
                     card.setRevealed(true);
                 card.update();
@@ -112,16 +115,21 @@ public class GameView extends SurfaceView implements Runnable {
 
             for(Card c : bottomRow) {
                 canvas.drawText("" + c.cardsInStack(), c.getX(), c.getY() + c.getHeight() + 50, fontPaint);
-                c.render(canvas, paint);
+                c.renderStack(canvas, fontPaint);
+            }
+
+            for(Card c : bottomRow) {
+                canvas.drawText("" + c.cardsInStack(), c.getX(), c.getY() + c.getHeight() + 50, fontPaint);
+                c.debugRender(canvas, fontPaint);
             }
 
             for(Card c : complete) {
-                c.render(canvas, paint);
+                c.renderStack(canvas, paint);
                 canvas.drawText("" + c.cardsInStack(), c.getX(), c.getY() + c.getHeight() + 50, fontPaint);
             }
 
             if (selected != null) {
-                selected.render(canvas, paint);
+                selected.renderStack(canvas, paint);
             }
 
             deck.render(canvas, paint);
@@ -154,15 +162,26 @@ public class GameView extends SurfaceView implements Runnable {
         gameThread.start();
     }
 
-    private static Card selected;
+    private static Card selected, selectedParent;
     private static int selectedOffsetX, selectedOffsetY;
 
     private Card findCard(int x, int y) {
+        Card card = findCardAll(x, y);
+        if (card == null || card.isPlaceHolder()) {
+            return null;
+        } else if(!card.isRevealed()) {
+            return null;
+        }
+        return card;
+    }
+
+    private Card findCardAll(int x, int y) {
         Card card;
+
         for(Card c : bottomRow) {
             card = c.pickCard(x, y);
             if (card != null) {
-                card.pickupCard();
+                card.poke();
                 return card;
             }
         }
@@ -178,7 +197,10 @@ public class GameView extends SurfaceView implements Runnable {
                 if (selected != null) {
                     selectedOffsetX = (int)((selected.getX()) - motionEvent.getX());
                     selectedOffsetY = (int)((selected.getY()) - motionEvent.getY());
-                    selected.pickupCard();
+                    selectedParent = selected.getParent();
+
+                    selectedParent.setNext(null);
+                    selected.setParent(null);
                 }
                 break;
 
@@ -191,8 +213,14 @@ public class GameView extends SurfaceView implements Runnable {
 
             case MotionEvent.ACTION_UP:
                 if (selected != null) {
-                    selected.dropOn(findCard((int)motionEvent.getX(), (int)motionEvent.getY()));
-//                    selected = null;
+                    Card destination = findCardAll((int)motionEvent.getX(), (int)motionEvent.getY());
+                    if (destination != null) {
+                        destination.addCard(selected);
+                    } else {
+                        selectedParent.addCard(selected);
+                    }
+                    selected = null;
+                    selectedParent = null;
                     selectedOffsetX = 0;
                     selectedOffsetY = 0;
                 }

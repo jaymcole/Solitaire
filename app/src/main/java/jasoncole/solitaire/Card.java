@@ -6,6 +6,8 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.Rect;
+import android.support.constraint.solver.widgets.Rectangle;
 
 /**
  * Created by Jason Cole on 7/13/2018.
@@ -28,7 +30,7 @@ public class Card {
 
     private float offsetX, offsetY;
     private Card parent, next;
-    private Card previousParent = null;
+    private static Card previousParent = null;
 
     private boolean revealed;
     private boolean placeHolder;
@@ -75,6 +77,7 @@ public class Card {
         this.suit = Suit.Clubs;
         this.next = null;
         placeHolder = true;
+        revealed = false;
         this.x = x;
         this.y = y;
         offsetX = ox;
@@ -146,44 +149,50 @@ public class Card {
     }
 }
 
-//    public void renderStack(Canvas canvas, Paint paint) {
-//        render(canvas, paint);
-//        if (next != null)
-//            next.renderStack(canvas, paint);
-//    }
+    public void renderStack(Canvas canvas, Paint paint) {
+        render(canvas, paint);
+        if (next != null)
+            next.renderStack(canvas, paint);
+    }
 
     public void render(Canvas canvas, Paint paint) {
         if (placeHolder) {
             canvas.drawLine((int)x, (int)y, (int)x+width, (int)y+height, paint);
             canvas.drawLine((int)x + width, (int)y, (int)x, (int)y+height, paint);
         } else {
-            canvas.drawBitmap(
-                    back,
-                    x,
-                    y,
-                    paint);
-        }
+            if (revealed) {
+                canvas.drawBitmap(
+                        front,
+                        x,
+                        y,
+                        paint);
+            } else {
+                canvas.drawBitmap(
+                        back,
+                        x,
+                        y,
+                        paint);
+            }
 
-        if (next != null) {
-            next.render(canvas, paint);
         }
     }
 
+    public void debugRender(Canvas canvas, Paint paint) {
+        if (next != null)
+            next.debugRender(canvas, paint);
+    }
 
     public void update() {
         updatePosition();
-
         if (next != null) {
             next.update();
         }
     }
 
-
     private void updatePosition() {
         if (parent != null) {
             offsetX = parent.getOffX();
             offsetY = parent.getOffY();
-
             x = parent.getX();
             y = parent.getY();
             if (!parent.placeHolder) {
@@ -204,11 +213,9 @@ public class Card {
      */
     public Card pickCard (int x, int y) {
         Card card = null;
-        if (inBounds(x,y) && !this.placeHolder) {
+        if (inBounds(x,y)) {
             card = this;
         }
-
-
         if (next != null) {
             if (next.inBounds(x, y)) {
                 card = next.pickCard(x, y);
@@ -217,37 +224,17 @@ public class Card {
         return card;
     }
 
-    /**
-     * Picks up a card from a stack.
-     */
-    public void pickupCard() {
-        if (parent == null)
-            return;
-        previousParent = parent;
-        parent.next = null;
-        parent = null;
-    }
 
-    /**
-     * Drops THIS onto card.
-     * @param parentCard - the card this card should be dropped on.
-     */
-    public void dropOn(Card parentCard) {
-        if (parentCard == null) {
-            if (previousParent != null) {
-                this.dropOn(previousParent);
+    public void poke() {
+        if (!isRevealed()) {
+            if (this.next == null) {
+                this.revealed = true;
             }
-            return;
         }
 
-        if (parentCard.getNext() == null) {
-            parentCard.next = this;
-            this.parent = parentCard;
-            update();
-        }else {
-            this.dropOn(parentCard.getNext());
-        }
+
     }
+
 
     public boolean addCard(Card card) {
         if (card == null)
@@ -275,7 +262,7 @@ public class Card {
             return 0;
     }
 
-//    private void setNext(Card card) {next = card;}
+    public void setNext(Card card) {next = card;}
     public void setParent(Card card) {
         this.parent = card;
     }
@@ -309,4 +296,6 @@ public class Card {
     public Card getNext() {
         return next;
     }
+    public boolean isPlaceHolder() {return placeHolder;}
+    public boolean isRevealed() {return revealed;}
 }

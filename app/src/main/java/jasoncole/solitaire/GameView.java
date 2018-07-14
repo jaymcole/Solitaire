@@ -1,14 +1,16 @@
 package jasoncole.solitaire;
 
-import android.app.Activity;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.util.Log;
+import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
+
+import java.util.LinkedList;
 
 import static jasoncole.solitaire.Card.height;
 import static jasoncole.solitaire.Card.width;
@@ -22,11 +24,10 @@ public class GameView extends SurfaceView implements Runnable {
     volatile boolean playing;
     private Thread gameThread = null;
 
-    //adding the player to this class
-    private Card player;
-
     //These objects will be used for drawing
     private Paint paint;
+    private Paint fontPaint;
+
     private Canvas canvas;
     private SurfaceHolder surfaceHolder;
 
@@ -35,10 +36,12 @@ public class GameView extends SurfaceView implements Runnable {
     private Deck deck;
     private Card hand;
 
-
-
     public GameView(Context context) {
         super(context);
+
+        fontPaint = new Paint();
+        fontPaint.setTextSize(50);
+        fontPaint.setColor(Color.RED);
 
         int screenWidth = Resources.getSystem().getDisplayMetrics().widthPixels;
         int screenHeight = Resources.getSystem().getDisplayMetrics().heightPixels;
@@ -46,19 +49,23 @@ public class GameView extends SurfaceView implements Runnable {
 
         int sideBuffer = (int)(height/20);
 
-        bottomRow = new Card[7];
-        for(int i = 0; i < 7; i++) {
-            bottomRow[i] = new Card((int)(i * (width + (height / 10.0))) + sideBuffer, screenHeight/2, 0, (int)(height / 10.0));
+        bottomRow = new Card[8];
+        for(int i = 0; i < bottomRow.length; i++) {
+            bottomRow[i] = new Card((int)(i * (width + (height / 10.0))) + sideBuffer, screenHeight/3, 0, (int)(height / 10.0));
+            Log.d("nothing", (int)(height / 10.0) + "");
             bottomRow[i].debug_name = "" + i + " of " + bottomRow[i].getSuit().name();
 
-            for(int j = 0; j < i+1; j++) {
+            for(int j = 0; j <= i+1; j++) {
                 Card card = new Card(Card.RED, j+i, Suit.Diamonds);
                 bottomRow[i].addCard(card);
 
+//                Log.d("Offset", card.debug_name + " " + card.getOffX() + card.getOffY());
                 if (j == i)
                     card.setRevealed(true);
+                card.update();
             }
-            bottomRow[i].update();
+            Log.d("Offset", bottomRow[0].debug_name + " " + bottomRow[0].getOffX() + bottomRow[0].getOffY());
+            bottomRow[0].update();
 
         }
 
@@ -75,6 +82,8 @@ public class GameView extends SurfaceView implements Runnable {
         paint = new Paint();
     }
 
+
+
     @Override
     public void run() {
         while (playing) {
@@ -85,8 +94,9 @@ public class GameView extends SurfaceView implements Runnable {
     }
 
     private void update() {
-        //updating player position
-//        player.update();
+//        for(Card c : bottomRow) {
+//            c.update();
+//        }
     }
 
     private void draw() {
@@ -98,12 +108,20 @@ public class GameView extends SurfaceView implements Runnable {
             canvas.drawColor(Color.BLUE);
             //Drawing the player
 
+
+
             for(Card c : bottomRow) {
+                canvas.drawText("" + c.cardsInStack(), c.getX(), c.getY() + c.getHeight() + 50, fontPaint);
                 c.render(canvas, paint);
             }
 
             for(Card c : complete) {
                 c.render(canvas, paint);
+                canvas.drawText("" + c.cardsInStack(), c.getX(), c.getY() + c.getHeight() + 50, fontPaint);
+            }
+
+            if (selected != null) {
+                selected.render(canvas, paint);
             }
 
             deck.render(canvas, paint);
@@ -134,5 +152,52 @@ public class GameView extends SurfaceView implements Runnable {
         playing = true;
         gameThread = new Thread(this);
         gameThread.start();
+    }
+
+    private static Card selected;
+    private static int selectedOffsetX, selectedOffsetY;
+
+    private Card findCard(int x, int y) {
+        Card card;
+        for(Card c : bottomRow) {
+            card = c.pickCard(x, y);
+            if (card != null) {
+                card.pickupCard();
+                return card;
+            }
+        }
+        return null;
+    }
+
+
+    @Override
+    public boolean onTouchEvent(MotionEvent motionEvent) {
+        switch (motionEvent.getAction() & MotionEvent.ACTION_MASK) {
+            case MotionEvent.ACTION_DOWN:
+                selected = findCard((int)motionEvent.getX(), (int)motionEvent.getY());
+                if (selected != null) {
+                    selectedOffsetX = (int)((selected.getX()) - motionEvent.getX());
+                    selectedOffsetY = (int)((selected.getY()) - motionEvent.getY());
+                    selected.pickupCard();
+                }
+                break;
+
+            case MotionEvent.ACTION_MOVE:
+                if (selected != null) {
+                    selected.setPosition( selectedOffsetX + (int)motionEvent.getX(), selectedOffsetY + (int)motionEvent.getY());
+                    selected.update();
+                }
+                break;
+
+            case MotionEvent.ACTION_UP:
+                if (selected != null) {
+                    selected.dropOn(findCard((int)motionEvent.getX(), (int)motionEvent.getY()));
+//                    selected = null;
+                    selectedOffsetX = 0;
+                    selectedOffsetY = 0;
+                }
+                break;
+        }
+        return true;
     }
 }

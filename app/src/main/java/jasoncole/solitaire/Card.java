@@ -6,8 +6,6 @@ import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
-import android.util.Log;
-import android.view.View;
 
 /**
  * Created by Jason Cole on 7/13/2018.
@@ -28,8 +26,9 @@ public class Card {
     private float x, y;
     public static float width, height;
 
-    private int offsetX, offsetY;
+    private float offsetX, offsetY;
     private Card parent, next;
+    private Card previousParent = null;
 
     private boolean revealed;
     private boolean placeHolder;
@@ -55,12 +54,14 @@ public class Card {
         this.color = color;
         this.number = number;
         this.suit = suit;
+        this.next = null;
         revealed = false;
         offsetX = 0;
         offsetY = 0;
         x = 0;
         y = 0;
         placeHolder = false;
+        debug_name = getColorName() + " " + getValue() + " of " + getSuit();
     }
 
     /**
@@ -72,14 +73,30 @@ public class Card {
         this.color = Card.BLACK;
         this.number = -1;
         this.suit = Suit.Clubs;
-
+        this.next = null;
         placeHolder = true;
         this.x = x;
         this.y = y;
         offsetX = ox;
         offsetY = oy;
+        debug_name = "placeholder";
     }
 
+    /**
+     *
+     * @param x
+     * @param y
+     * @return true if the point x and y are within this cards bounds.
+     */
+    public boolean inBounds (int x, int y) {
+        if (x < this.x || x > this.x + width) {
+            return false;
+        }
+        if (y < this.y || y > this.y + height) {
+            return false;
+        }
+        return true;
+    }
 
 
 
@@ -103,8 +120,18 @@ public class Card {
         back = BitmapFactory.decodeResource(context.getResources(), resource);
     }
 
+    public int getValue() {
+        return number;
+    }
 
-    private static char getCharacterRepresentation (int number) {
+    public String getColorName() {
+        if (color == Card.RED)
+            return "Red";
+        else
+            return "Black";
+    }
+
+    public static char getCharacterRepresentation (int number) {
         switch (number) {
             case 1:
                 return 'A';
@@ -118,6 +145,12 @@ public class Card {
         return (char) number;
     }
 }
+
+//    public void renderStack(Canvas canvas, Paint paint) {
+//        render(canvas, paint);
+//        if (next != null)
+//            next.renderStack(canvas, paint);
+//    }
 
     public void render(Canvas canvas, Paint paint) {
         if (placeHolder) {
@@ -145,55 +178,135 @@ public class Card {
         }
     }
 
-    public void updatePosition() {
-        if (parent != null) {
-            offsetX = parent.offsetX;
-            offsetY = parent.offsetY;
 
-            x = parent.getX() + offsetX;
-            y = parent.getY() + offsetY;
+    private void updatePosition() {
+        if (parent != null) {
+            offsetX = parent.getOffX();
+            offsetY = parent.getOffY();
+
+            x = parent.getX();
+            y = parent.getY();
+            if (!parent.placeHolder) {
+                x += offsetX;
+                y += offsetY;
+            }
+
         }
     }
 
-    public void addCard(Card card) {
+    /**
+     *
+     * @param x screen coordinate
+     * @param y screen coordinate
+     * @return the top most card this that point (x, y) falls on.
+     *         null if point (x, y) is not on a card.
+     *         Will NOT return a placeholder card.
+     */
+    public Card pickCard (int x, int y) {
+        Card card = null;
+        if (inBounds(x,y) && !this.placeHolder) {
+            card = this;
+        }
+
+
+        if (next != null) {
+            if (next.inBounds(x, y)) {
+                card = next.pickCard(x, y);
+            }
+        }
+        return card;
+    }
+
+    /**
+     * Picks up a card from a stack.
+     */
+    public void pickupCard() {
+        if (parent == null)
+            return;
+        previousParent = parent;
+        parent.next = null;
+        parent = null;
+    }
+
+    /**
+     * Drops THIS onto card.
+     * @param parentCard - the card this card should be dropped on.
+     */
+    public void dropOn(Card parentCard) {
+        if (parentCard == null) {
+            if (previousParent != null) {
+                this.dropOn(previousParent);
+            }
+            return;
+        }
+
+        if (parentCard.getNext() == null) {
+            parentCard.next = this;
+            this.parent = parentCard;
+            update();
+        }else {
+            this.dropOn(parentCard.getNext());
+        }
+    }
+
+    public boolean addCard(Card card) {
+        if (card == null)
+            return false;
+
         if (next == null) {
             next = card;
-            card.setParent(this);
-            updatePosition();
+            next.setParent(this);
+            next.update();
         }else {
             next.addCard(card);
         }
+
+        return true;
     }
 
+    /**
+     *
+     * @return the number of cards in a stack
+     */
+    public int cardsInStack() {
+        if (next != null)
+            return next.cardsInStack() + 1;
+        else
+            return 0;
+    }
+
+//    private void setNext(Card card) {next = card;}
     public void setParent(Card card) {
         this.parent = card;
-        card.setOffsets(offsetX, offsetY);
     }
-
+    public Card getParent() {
+        return parent;
+    }
     public float getX() {
         return x;
     }
-
     public float getY() {
         return y;
     }
-
-    public void setOffsets(int x, int y) {
+    public float getOffX() {return offsetX;}
+    public float getOffY() {return offsetY;}
+    public float getWidth() {return width;}
+    public float getHeight() {return height;}
+    public Suit getSuit() {
+        return suit;
+    }
+    public void setOffsets(float x, float y) {
         this.offsetX = x;
         this.offsetY = y;
     }
-
     public void setPosition(int x, int y) {
         this.x = x;
         this.y = y;
     }
-
-    public Suit getSuit() {
-        return suit;
-    }
-
     public void setRevealed(boolean revealed) {
         this.revealed = revealed;
     }
-
+    public Card getNext() {
+        return next;
+    }
 }

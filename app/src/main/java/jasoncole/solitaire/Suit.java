@@ -10,10 +10,14 @@ public enum Suit {
     Hearts      ("♥"),
     Spades      ("♠");
 
-    private Suit (String character) {
-
+    private final String character;
+    Suit (String character) {
+        this.character = character;
     }
 
+    public String getCharacter() {
+        return character;
+    }
 
 
 }

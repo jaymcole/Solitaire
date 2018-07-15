@@ -5,6 +5,7 @@ import android.content.res.Resources;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.support.constraint.solver.widgets.Rectangle;
@@ -35,6 +36,17 @@ public class Card {
     private boolean revealed;
     private boolean placeHolder;
 
+    private static Paint debugPaint;
+    private static Paint debugPaintSelected;
+    private static Paint debugPaintHover;
+    private Rect debugRect = new Rect();
+
+    private static Paint redPaint;
+    private static Paint blackPaint;
+
+
+    private static int fontOffset;
+
     public static void initCards(Context context) {
         width = Resources.getSystem().getDisplayMetrics().widthPixels / 8;
         height = Resources.getSystem().getDisplayMetrics().heightPixels / 4;
@@ -43,12 +55,39 @@ public class Card {
         float ratio = width / front.getWidth();
         width = front.getWidth() * ratio;
         height = front.getHeight() * ratio;
-
         front = Bitmap.createScaledBitmap(front, (int)(width), (int)(height), false);
-
 
         back = BitmapFactory.decodeResource(context.getResources(), R.drawable.card_back);
         back = Bitmap.createScaledBitmap(back, (int)(width), (int)(height), false);
+
+
+        redPaint = new Paint();
+        redPaint.setTextSize(40);
+        redPaint.setColor(Color.RED);
+
+        blackPaint = new Paint();
+        blackPaint.setTextSize(40);
+        blackPaint.setColor(Color.DKGRAY);
+
+        fontOffset = (int)redPaint.getFontMetrics().top;
+
+        debugPaint = new Paint();
+        debugPaint.setTextSize(50);
+        debugPaint.setColor(Color.RED);
+        debugPaint.setStrokeWidth(5);
+        debugPaint.setStyle(Paint.Style.STROKE);
+
+        debugPaintSelected = new Paint();
+        debugPaintSelected.setTextSize(50);
+        debugPaintSelected.setColor(Color.GREEN);
+        debugPaintSelected.setStrokeWidth(5);
+        debugPaintSelected.setStyle(Paint.Style.STROKE);
+
+        debugPaintHover = new Paint();
+        debugPaintHover.setTextSize(50);
+        debugPaintHover.setColor(Color.YELLOW);
+        debugPaintHover.setStrokeWidth(5);
+        debugPaintHover.setStyle(Paint.Style.STROKE);
     }
 
 
@@ -155,17 +194,32 @@ public class Card {
             next.renderStack(canvas, paint);
     }
 
+
+
     public void render(Canvas canvas, Paint paint) {
         if (placeHolder) {
             canvas.drawLine((int)x, (int)y, (int)x+width, (int)y+height, paint);
             canvas.drawLine((int)x + width, (int)y, (int)x, (int)y+height, paint);
         } else {
             if (revealed) {
-                canvas.drawBitmap(
-                        front,
-                        x,
-                        y,
-                        paint);
+
+                if (color == Card.RED) {
+                    canvas.drawRect(debugRect, blackPaint);
+                    canvas.drawText(suit.getCharacter() + " " + number, x + 10, y - fontOffset, redPaint);
+//                    canvas.drawText(number + "", x + width - 30, y - fontOffset, redPaint);
+                } else {
+                    canvas.drawRect(debugRect, redPaint);
+                    canvas.drawText(suit.getCharacter() + " " + number, x + 10, y - fontOffset, blackPaint);
+//                    canvas.drawText(number + "", x + width - 30, y - fontOffset, blackPaint);
+                }
+                canvas.drawRect(debugRect, debugPaint);
+
+//                canvas.drawBitmap(
+//                        front,
+//                        x,
+//                        y,
+//                        paint);
+
             } else {
                 canvas.drawBitmap(
                         back,
@@ -178,12 +232,20 @@ public class Card {
     }
 
     public void debugRender(Canvas canvas, Paint paint) {
+        Paint p = debugPaint;
+        if (selected) {
+            p = debugPaintSelected;
+        } else if(hover) {
+            p = debugPaintHover;
+        }
+        canvas.drawRect(debugRect, p);
         if (next != null)
             next.debugRender(canvas, paint);
     }
 
     public void update() {
         updatePosition();
+        debugRect.set((int)x, (int)y, (int)(x + width), (int)(y + height));
         if (next != null) {
             next.update();
         }
@@ -216,11 +278,13 @@ public class Card {
         if (inBounds(x,y)) {
             card = this;
         }
+
         if (next != null) {
             if (next.inBounds(x, y)) {
                 card = next.pickCard(x, y);
             }
         }
+
         return card;
     }
 
@@ -260,6 +324,15 @@ public class Card {
             return next.cardsInStack() + 1;
         else
             return 0;
+    }
+
+    private boolean selected = false;
+    public void setSelected(boolean selected) {
+        this.selected = selected;
+    }
+    private boolean hover = false;
+    public void setHover(boolean hover) {
+        this.hover = hover;
     }
 
     public void setNext(Card card) {next = card;}

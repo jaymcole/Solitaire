@@ -40,6 +40,7 @@ public class GameView extends SurfaceView implements Runnable {
 
     public GameView(Context context) {
         super(context);
+        this.setFocusable(true);
 
         fontPaint = new Paint();
         fontPaint.setTextSize(50);
@@ -55,7 +56,7 @@ public class GameView extends SurfaceView implements Runnable {
 
         bottomRow = new Card[8];
         for(int i = 0; i < bottomRow.length; i++) {
-            bottomRow[i] = new Card((int)(i * (width + (height / 10.0))) + sideBuffer, screenHeight/3, 0, (int)(height / 10.0));
+            bottomRow[i] = new Card((int)(i * (width + (height / 10.0))) + sideBuffer, screenHeight/3, 0, (int)(height / 5.0));
             Log.d("nothing", (int)(height / 10.0) + "");
             bottomRow[i].debug_name = "" + i + " of " + bottomRow[i].getSuit().name();
 
@@ -72,6 +73,8 @@ public class GameView extends SurfaceView implements Runnable {
 
         }
 
+
+
         complete = new Card[4];
         for(int i = 0; i < 4; i++) {
             complete[i] = new Card((int)((screenWidth / 2) + (i * (Card.width))), sideBuffer, 0, 0);
@@ -84,8 +87,6 @@ public class GameView extends SurfaceView implements Runnable {
 
         paint = new Paint();
     }
-
-
 
     @Override
     public void run() {
@@ -118,11 +119,6 @@ public class GameView extends SurfaceView implements Runnable {
                 c.renderStack(canvas, fontPaint);
             }
 
-            for(Card c : bottomRow) {
-                canvas.drawText("" + c.cardsInStack(), c.getX(), c.getY() + c.getHeight() + 50, fontPaint);
-                c.debugRender(canvas, fontPaint);
-            }
-
             for(Card c : complete) {
                 c.renderStack(canvas, paint);
                 canvas.drawText("" + c.cardsInStack(), c.getX(), c.getY() + c.getHeight() + 50, fontPaint);
@@ -141,6 +137,9 @@ public class GameView extends SurfaceView implements Runnable {
     }
 
     private void control() {
+
+
+
         try {
             gameThread.sleep(17);
         } catch (InterruptedException e) {
@@ -175,23 +174,58 @@ public class GameView extends SurfaceView implements Runnable {
         return card;
     }
 
+    /**
+     * Finds the best match card INCLUDE placeholders. Use findCard() to get playable cards.
+     * @param x screen coordinate
+     * @param y screen coordinate
+     * @return The top-most card at screen coordinates (x, y).
+     */
     private Card findCardAll(int x, int y) {
-        Card card;
+        Card card = null;
 
-        for(Card c : bottomRow) {
-            card = c.pickCard(x, y);
-            if (card != null) {
-                card.poke();
-                return card;
+        // Check the bottomRow Cards
+        if (y >= bottomRow[0].getY()) {
+            for(Card c : bottomRow) {
+                if (x < c.getX() + c.getWidth()) {
+                    card = checkStack(c, x, y);
+                    break;
+                }
+            }
+        } else {
+            // Check the 'complete' stacks
+            if (x < complete[0].getX()) {
+                for(Card c : complete) {
+                    if (x < c.getX() + c.getWidth()) {
+                        card = checkStack(c, x, y);
+                        break;
+                    }
+                }
+            } else { // check the deck
+                card = deck.getHand();
             }
         }
-        return null;
+        return card;
     }
 
+    private Card checkStack(Card topCard, int x, int y) {
+        Card c = topCard;
+        Card bestMatch = null;
+        while (c != null) {
+            if (c.inBounds(x, y)) {
+                bestMatch = c;
+            }
+            c = c.getNext();
+        }
+        if (bestMatch != null) {
+            bestMatch.poke();
+        }
+        return bestMatch;
+    }
 
     @Override
     public boolean onTouchEvent(MotionEvent motionEvent) {
         switch (motionEvent.getAction() & MotionEvent.ACTION_MASK) {
+
             case MotionEvent.ACTION_DOWN:
                 selected = findCard((int)motionEvent.getX(), (int)motionEvent.getY());
                 if (selected != null) {
@@ -209,6 +243,13 @@ public class GameView extends SurfaceView implements Runnable {
                     selected.setPosition( selectedOffsetX + (int)motionEvent.getX(), selectedOffsetY + (int)motionEvent.getY());
                     selected.update();
                 }
+//                for(Card c : cards) {
+//                    if (c.inBounds((int)motionEvent.getX(), (int)motionEvent.getY())) {
+//                        c.setSelected(true);
+//                    } else {
+//                        c.setSelected(false);
+//                    }
+//                }
                 break;
 
             case MotionEvent.ACTION_UP:

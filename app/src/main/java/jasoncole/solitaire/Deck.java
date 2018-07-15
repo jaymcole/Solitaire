@@ -21,6 +21,15 @@ public class Deck extends Card{
 
     }
 
+    public void click(int x, int y) {
+
+    }
+
+    public Card getHand() {
+        return hand;
+    }
+
+
     @Override
     public void render(Canvas canvas, Paint paint) {
         super.render(canvas, paint);

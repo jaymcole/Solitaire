@@ -5,19 +5,22 @@ package jasoncole.solitaire;
  */
 
 public enum Suit {
-    Clubs       ("♣"),
-    Diamonds    ("♦"),
-    Hearts      ("♥"),
-    Spades      ("♠");
+    Spades      ("♠", Card.BLACK),
+    Diamonds    ("♦", Card.RED),
+    Hearts      ("♥", Card.RED),
+    Clubs       ("♣", Card.BLACK);
+
 
     private final String character;
-    Suit (String character) {
+    private final int color;
+    Suit (String character, int color) {
         this.character = character;
+        this.color = color;
     }
 
     public String getCharacter() {
         return character;
     }
 
-
+    public int getColor() {return color;}
 }

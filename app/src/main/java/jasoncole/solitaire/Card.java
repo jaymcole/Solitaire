@@ -20,6 +20,8 @@ public class Card {
     public String debug_name = "unnamed";
     private String name;
 
+    private float targetX, targetY;
+    private static int speed = 10;
 
 
     public static final int BLACK = 0;
@@ -188,13 +190,38 @@ public class Card {
         }
     }
 
+    private float xSpeed, ySpeed;
     private void updatePosition() {
         if (parent != null) {
-            x = parent.getX() + offsetX;
-            y = parent.getY() + offsetY;
+            if (!revealed) {
+                x = parent.getX() + (float)(offsetX * 0.5);
+                y = parent.getY() + (float)(offsetY * 0.5);
+            } else {
+                x = parent.getX() + offsetX;
+                y = parent.getY() + offsetY;
+            }
+
         } else if (cardStack != null){
-            x = cardStack.getX();
-            y = cardStack.getY();
+            targetX = cardStack.getX();
+            targetY = cardStack.getY();
+
+            if ((int)targetX != (int)x || (int)targetY != (int)y) {
+                xSpeed = Math.min(Math.abs(targetX-x), speed);
+                ySpeed = Math.min(Math.abs(targetY-y), speed);
+
+                if (x > targetX) {
+                    xSpeed *= -1;
+                }
+
+                if (y > targetY) {
+                    ySpeed *= -1;
+                }
+
+                x += xSpeed;
+                y += ySpeed;
+
+                GameView.updateList.add(this);
+            }
         }
     }
 

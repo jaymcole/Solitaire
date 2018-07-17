@@ -6,13 +6,13 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
-import android.graphics.RectF;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
 import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Random;
 
@@ -22,14 +22,17 @@ import stacks.Stock;
 import stacks.Tableau;
 import stacks.Waste;
 
-import static jasoncole.solitaire.Card.height;
-
-
 /**
  * Created by Jason Cole on 7/13/2018.
  */
 
 public class GameView extends SurfaceView implements Runnable {
+
+    private static final int GAME_STATE_DEALING = 0;
+    private static final int GAME_STATE_GAME_PLAYING = 1;
+    private static final int GAME_STATE_GAME_OVER = 2;
+    private static int GAME_STATE = GAME_STATE_GAME_PLAYING;
+
 
     volatile boolean playing;
     private Thread gameThread = null;
@@ -44,12 +47,11 @@ public class GameView extends SurfaceView implements Runnable {
     private CardStack[] foundations;
     private CardStack stock;
     private CardStack waste;
-    private Deck deck;
-    private Card hand;
 
 
     private Paint tableauDebug, stockDebug, foundationDebug, wasteDebug;
 
+    public static ArrayList<Card> updateList;
 
     private static Random random;
 
@@ -68,6 +70,7 @@ public class GameView extends SurfaceView implements Runnable {
         fontPaint.setStrokeWidth(5);
         fontPaint.setStyle(Paint.Style.STROKE);
 
+        updateList = new ArrayList<Card>();
 
         tableauDebug = new Paint(fontPaint);
         tableauDebug.setColor(Color.GREEN);
@@ -100,7 +103,6 @@ public class GameView extends SurfaceView implements Runnable {
         waste = new Waste((int)((xBuffer / 2) + Card.width + xBuffer), (int)yBuffer, (int)(Card.width / 4), 0);
         stock = new Stock((xBuffer / 2), yBuffer, waste);
 
-        int sideBuffer = (int)(height/20);
         foundations = new Foundation[4];
         for(int i = 0; i < Suit.values().length; i++) {
             foundations[i] = new Foundation((xBuffer / 2) + (int)( 3 * ((int)Card.width + xBuffer) + (i * (Card.width + xBuffer)) ), yBuffer, Suit.values()[i]);
@@ -123,8 +125,6 @@ public class GameView extends SurfaceView implements Runnable {
             stock.addCardToTop(c);
         }
 
-
-//        bounds = new ArrayList<Rect>();
         stockArea = new Rect(
                 0,
                 0,
@@ -155,6 +155,10 @@ public class GameView extends SurfaceView implements Runnable {
         paint = new Paint();
     }
 
+    private void dealCards() {
+
+    }
+
     private LinkedList<Card> buildDeck() {
         LinkedList<Card> cards = new LinkedList<Card>();
         for(Suit s : Suit.values()) {
@@ -176,6 +180,31 @@ public class GameView extends SurfaceView implements Runnable {
 
 
     private void update() {
+        if (GAME_STATE == GAME_STATE_DEALING) {
+
+        } else if(GAME_STATE == GAME_STATE_GAME_PLAYING) {
+            for(int i = updateList.size()-1; i >= 0; i--) {
+                updateList.get(i).update();
+                updateList.remove(i);
+            }
+        } else if (GAME_STATE == GAME_STATE_GAME_OVER) {
+
+        }
+
+
+//        for (Iterator<Card> it = updateList.iterator(); it.hasNext(); ) {
+//            Card card = it.next();
+//            card.update();
+//            updateList.remove(card);
+//
+//        }
+        Log.d("asd", "" + updateList.size());
+//
+//        for(Card card : updateList) {
+//            card.update();
+//        }
+//        updateList.clear();
+
 //        for(CardStack tableau : tableaus) {
 //            Tableau t = (Tableau)tableau;
 //            for (CardStack foundation : foundations) {

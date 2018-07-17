@@ -3,6 +3,7 @@ package stacks;
 import android.graphics.Canvas;
 import android.graphics.Paint;
 import android.graphics.Rect;
+import android.graphics.RectF;
 import android.util.Log;
 
 import java.util.ArrayList;
@@ -20,7 +21,7 @@ public abstract class CardStack {
     protected Card head = null, tail = null;
     protected int childOffsetX, childOffsetY;
     protected int x, y;
-    protected Rect bounds;
+    protected RectF bounds;
 
 
     public CardStack(int x, int y) {
@@ -88,7 +89,7 @@ public abstract class CardStack {
     }
 
     protected void initBounds() {
-        bounds = new Rect(x, y, x + (int)Card.width, y + (int)Card.height);
+        bounds = new RectF(x, y, x + Card.width, y + Card.height);
     }
 
     public boolean contains(int x, int y) {
@@ -179,7 +180,8 @@ public abstract class CardStack {
      * @param paint
      */
     public void render(Canvas canvas, Paint paint) {
-        canvas.drawRect(x, y, x + Card.width, y+ Card.height, paint);
+//        canvas.drawRect(x, y, x + Card.width, y+ Card.height, paint);
+        canvas.drawRoundRect(bounds, 3, 3, paint);
         canvas.drawText(this.TAG, x, y + Card.height / 2, paint);
         if (head != null) {
             head.renderStack(canvas, paint);

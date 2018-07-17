@@ -64,13 +64,19 @@ public class Tableau extends CardStack {
             else
                 return false;
         }
-        if (!validStack(card))
+        if (!validStack(card) || !tail.isRevealed())
             return false;
         return tail.getValue() == card.getValue() + 1 && tail.getSuit().getColor() != card.getSuit().getColor();
     }
 
     @Override
     protected boolean validPickup(Card card) {
+        if (card == null)
+            return false;
+
+        card.poke();
+        if (!card.isRevealed())
+            return false;
         return validStack(card);
     }
 }

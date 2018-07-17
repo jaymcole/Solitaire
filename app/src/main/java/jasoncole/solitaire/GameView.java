@@ -2,17 +2,19 @@ package jasoncole.solitaire;
 
 import android.content.Context;
 import android.content.res.Resources;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
+import android.graphics.drawable.BitmapDrawable;
 import android.util.Log;
 import android.view.MotionEvent;
 import android.view.SurfaceHolder;
 import android.view.SurfaceView;
 
 import java.util.ArrayList;
-import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.Random;
 
@@ -28,10 +30,13 @@ import stacks.Waste;
 
 public class GameView extends SurfaceView implements Runnable {
 
+    private static final int GAME_STATE_PAUSED = -1;
     private static final int GAME_STATE_DEALING = 0;
     private static final int GAME_STATE_GAME_PLAYING = 1;
     private static final int GAME_STATE_GAME_OVER = 2;
     private static int GAME_STATE = GAME_STATE_GAME_PLAYING;
+
+    private Bitmap background;
 
 
     volatile boolean playing;
@@ -49,7 +54,7 @@ public class GameView extends SurfaceView implements Runnable {
     private CardStack waste;
 
 
-    private Paint tableauDebug, stockDebug, foundationDebug, wasteDebug;
+    private Paint tableauDebug, stockDebug, foundationDebug, wasteDebug, backgroundPaint;
 
     public static ArrayList<Card> updateList;
 
@@ -59,10 +64,24 @@ public class GameView extends SurfaceView implements Runnable {
 
     private Rect stockArea, wasteArea, foundationArea, tableauArea;
 
+
+    public static int placeholder_resource;
+    public static int card_back_resource;
+    public static int card_front_resource;
+    public static int background_resource;
+
     public GameView(Context context) {
         super(context);
         random = new Random();
         this.setFocusable(true);
+
+
+        placeholder_resource = R.drawable.meme_3;
+        background_resource = R.drawable.meme_4;
+        card_back_resource = R.drawable.meme_2;
+        card_front_resource = R.drawable.meme_1;
+
+
 
         fontPaint = new Paint();
         fontPaint.setTextSize(50);
@@ -89,41 +108,37 @@ public class GameView extends SurfaceView implements Runnable {
 //        wasteDebug.setColor(Color.TRANSPARENT);
 
 
+        backgroundPaint = new Paint();
 
-        int screenWidth = Resources.getSystem().getDisplayMetrics().widthPixels;
-        int screenHeight = Resources.getSystem().getDisplayMetrics().heightPixels;
+
+
 
         Card.initCards(context);
-        int xBuffer = (int)((screenWidth - (Card.width * 7.0)) / 7.0);
-        int yBuffer = 20;
-        LinkedList<Card> cards = buildDeck();
 
+        screenWidth = Resources.getSystem().getDisplayMetrics().widthPixels;
+        screenHeight = Resources.getSystem().getDisplayMetrics().heightPixels;
+        xBuffer = (int)((screenWidth - (Card.width * 7.0)) / 7.0);
+        yBuffer = 20;
+        background = BitmapFactory.decodeResource(context.getResources(), background_resource);
+        background = Bitmap.createScaledBitmap(background, screenWidth, screenHeight, false);
+
+        CardStack.init(context);
 
 
         waste = new Waste((int)((xBuffer / 2) + Card.width + xBuffer), (int)yBuffer, (int)(Card.width / 4), 0);
         stock = new Stock((xBuffer / 2), yBuffer, waste);
+
+        tableaus = new Tableau[7];
+        for(int i = 0; i < tableaus.length; i++) {
+            tableaus[i] = new Tableau((xBuffer / 2) + i * ((int)Card.width + xBuffer), (int)(stock.getY() + Card.height + yBuffer), 0,  (int)(Card.width / 4));
+        }
 
         foundations = new Foundation[4];
         for(int i = 0; i < Suit.values().length; i++) {
             foundations[i] = new Foundation((xBuffer / 2) + (int)( 3 * ((int)Card.width + xBuffer) + (i * (Card.width + xBuffer)) ), yBuffer, Suit.values()[i]);
         }
 
-        tableaus = new Tableau[7];
-        for(int i = 0; i < tableaus.length; i++) {
-            tableaus[i] = new Tableau((xBuffer / 2) + i * ((int)Card.width + xBuffer), (int)(stock.getY() + Card.height + yBuffer), 0,  (int)(Card.width / 4));
-            for(int j = 0; j <= i; j++) {
-                Card card = cards.get(random.nextInt(cards.size()));
-                cards.remove(card);
-                tableaus[i].addCardToTop(card);
-                if (j == i)
-                    card.setRevealed(true);
-                card.update();
-            }
-        }
 
-        for(Card c : cards) {
-            stock.addCardToTop(c);
-        }
 
         stockArea = new Rect(
                 0,
@@ -153,17 +168,76 @@ public class GameView extends SurfaceView implements Runnable {
         surfaceHolder = getHolder();
 
         paint = new Paint();
+
+        cards = buildDeck();
+        setGameState(GAME_STATE_DEALING);
     }
 
-    private void dealCards() {
+    private LinkedList<Card> cards ;
+    private int tableauCol, cycle;
+    private float dealingTime;
+    private static final float TIME_BETWEEN_CARDS = 0.1f;
+    private static int dealingPhase;
+    private static final int DEAL_DECK = -1, DEAL_STOCK = 0, DEAL_TABLE = 1;
+    private void dealCards(float deltaTime) {
+        dealingTime += deltaTime;
+        Card card;
+        while(dealingTime >= TIME_BETWEEN_CARDS) {
+            dealingTime -= TIME_BETWEEN_CARDS;
+            switch (dealingPhase) {
+                case DEAL_DECK:
+                    tableauCol = 0;
+                    cycle = 0;
+                    dealingTime = 0;
+                    cards = buildDeck();
+                    dealingPhase = DEAL_STOCK;
+                case DEAL_STOCK:
+                    while (!cards.isEmpty()) {
+                        card = cards.get(random.nextInt(cards.size()));
+                        cards.remove(card);
+                        stock.addCardToTop(card);
+                        card.scheduleUpdate();
+//
+//                        float maxRot = 3;
+//                        card.setRot(random.nextInt((int)maxRot) - (maxRot*0.5f) + random.nextFloat());
+                    }
 
+                    dealingPhase = DEAL_TABLE;
+                    break;
+
+                case DEAL_TABLE:
+
+                    if (tableauCol >= tableaus.length) {
+                        cycle++;
+                        tableauCol = cycle;
+
+                    }
+                    card = stock.getTail();
+                    stock.remove(card);
+                    tableaus[tableauCol].addCardToTop(card);
+
+                    if (cycle == tableauCol)
+                        tableaus[tableauCol].getTail().setRevealed(true);
+                    card.scheduleUpdate();
+                    tableauCol++;
+
+                    if (cycle == tableaus.length - 1) {
+                        dealingPhase = DEAL_DECK;
+                        setGameState(GAME_STATE_GAME_PLAYING);
+                    }
+                    break;
+            }
+        }
     }
 
     private LinkedList<Card> buildDeck() {
         LinkedList<Card> cards = new LinkedList<Card>();
         for(Suit s : Suit.values()) {
             for (int i = 1; i <= 13; i++) {
-                cards.add(new Card(s.getColor(), i, s));
+                Card card = new Card(s.getColor(), i, s);
+                card.setPosition(stock.getX(), stock.getY());
+                cards.add(card);
+
             }
         }
         return cards;
@@ -171,53 +245,95 @@ public class GameView extends SurfaceView implements Runnable {
 
     @Override
     public void run() {
+        Long time = System.currentTimeMillis();
+        float delta;
         while (playing) {
-            update();
+            delta = (System.currentTimeMillis() - time) * 0.001f;
+            time = System.currentTimeMillis();
+            update(delta);
             draw();
             control();
+
         }
     }
 
+    private static int xBuffer, yBuffer, screenWidth, screenHeight;
+    private void setGameState(int newGameState) {
+        if (GAME_STATE == newGameState)
+            return;
 
-    private void update() {
-        if (GAME_STATE == GAME_STATE_DEALING) {
+        // DO stuff upon move FROM a state.
+        switch (GAME_STATE) {
+            case GAME_STATE_DEALING:
+                ((Stock) stock).drawHand();
+                break;
 
-        } else if(GAME_STATE == GAME_STATE_GAME_PLAYING) {
-            for(int i = updateList.size()-1; i >= 0; i--) {
-                updateList.get(i).update();
-                updateList.remove(i);
-            }
-        } else if (GAME_STATE == GAME_STATE_GAME_OVER) {
 
+            case GAME_STATE_GAME_PLAYING:
+
+                break;
+
+
+            case GAME_STATE_GAME_OVER:
+
+                break;
         }
 
+        // Do stuff upon moving TO a state.
+        switch (GAME_STATE) {
+            case GAME_STATE_PAUSED:
+                break;
 
-//        for (Iterator<Card> it = updateList.iterator(); it.hasNext(); ) {
-//            Card card = it.next();
-//            card.update();
-//            updateList.remove(card);
-//
-//        }
-        Log.d("asd", "" + updateList.size());
-//
-//        for(Card card : updateList) {
-//            card.update();
-//        }
-//        updateList.clear();
+            case GAME_STATE_DEALING:
+                dealingPhase = DEAL_DECK;
 
-//        for(CardStack tableau : tableaus) {
-//            Tableau t = (Tableau)tableau;
-//            for (CardStack foundation : foundations) {
-//                Foundation f = (Foundation)foundation;
-//                Card card = t.getTail();
-//                if (f.drop(card)) {
-//                    t.remove(card);
-//                    card.setRevealed(true);
-//                    f.addCardToTop(card);
-//                    return;
-//                }
-//            }
-//        }
+                break;
+
+
+            case GAME_STATE_GAME_PLAYING:
+
+                break;
+
+
+            case GAME_STATE_GAME_OVER:
+
+                break;
+
+
+        }
+        GAME_STATE = newGameState;
+    }
+
+
+    private void update(float deltaTime) {
+        switch (GAME_STATE) {
+            case GAME_STATE_PAUSED:
+
+                break;
+
+            case GAME_STATE_DEALING:
+                dealCards(deltaTime);
+                for(int i = updateList.size()-1; i >= 0; i--) {
+                    updateList.get(i).update(deltaTime);
+                    updateList.remove(i);
+                }
+                break;
+
+
+            case GAME_STATE_GAME_PLAYING:
+                for(int i = updateList.size()-1; i >= 0; i--) {
+                    updateList.get(i).update(deltaTime);
+                    updateList.remove(i);
+                }
+                break;
+
+
+            case GAME_STATE_GAME_OVER:
+
+                break;
+
+
+        }
     }
 
     public static boolean gameover = false;
@@ -228,26 +344,36 @@ public class GameView extends SurfaceView implements Runnable {
             canvas = surfaceHolder.lockCanvas();
             //drawing a background color for canvas
             if (!gameover)
-                canvas.drawColor(Color.BLUE);
-            //Drawing the player
+                canvas.drawColor(Color.GREEN);
 
+            canvas.drawBitmap(background, 0, 0, backgroundPaint);
 
+            stock.render(canvas);
+            waste.render(canvas);
 
             for(CardStack t : tableaus) {
-                t.render(canvas, tableauDebug);
+                t.render(canvas);
             }
 
             for(CardStack f : foundations) {
-                f.render(canvas, foundationDebug);
+                f.render(canvas);
             }
 
-            stock.render(canvas, stockDebug);
-            waste.render(canvas, wasteDebug);
+            stock.renderStack(canvas, stockDebug);
+            waste.renderStack(canvas, wasteDebug);
+
+            for(CardStack t : tableaus) {
+                t.renderStack(canvas, tableauDebug);
+            }
+
+            for(CardStack f : foundations) {
+                f.renderStack(canvas, foundationDebug);
+            }
 
             if (selected != null) {
                 selected.renderStack(canvas, paint);
             }
-//            debug_render(canvas);
+
             surfaceHolder.unlockCanvasAndPost(canvas);
         }
     }

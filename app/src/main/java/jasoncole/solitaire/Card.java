@@ -21,8 +21,8 @@ public class Card {
     private String name;
 
     private float targetX, targetY;
-    private static int speed = 10;
-
+    private static float speed = 2500;
+//    private float rotation = 0;
 
     public static final int BLACK = 0;
     public static final int RED = 1;
@@ -51,13 +51,13 @@ public class Card {
         width = Resources.getSystem().getDisplayMetrics().widthPixels / 8;
         height = Resources.getSystem().getDisplayMetrics().heightPixels / 4;
 
-        front = BitmapFactory.decodeResource(context.getResources(), R.drawable.card_front);
+        front = BitmapFactory.decodeResource(context.getResources(), GameView.card_front_resource);
         float ratio = width / front.getWidth();
         width = front.getWidth() * ratio;
         height = front.getHeight() * ratio;
         front = Bitmap.createScaledBitmap(front, (int)(width), (int)(height), false);
 
-        back = BitmapFactory.decodeResource(context.getResources(), R.drawable.card_back);
+        back = BitmapFactory.decodeResource(context.getResources(), GameView.card_back_resource);
         back = Bitmap.createScaledBitmap(back, (int)(width), (int)(height), false);
 
         background = new Paint();
@@ -156,6 +156,10 @@ public class Card {
     }
 }
 
+//    public void setRot(float rot) {
+//        rotation = rot;
+//    }
+
     public void renderStack(Canvas canvas, Paint paint) {
         render(canvas, paint);
         if (next != null)
@@ -163,11 +167,18 @@ public class Card {
     }
 
     public void render(Canvas canvas, Paint paint) {
-
+//        canvas.rotate(rotation);
             if (revealed) {
 
+
                 canvas.drawRect(x, y, x + width, y + height, background);
+                canvas.drawBitmap(
+                        front,
+                        x,
+                        y,
+                        paint);
                 canvas.drawRect(x, y, x + width, y + height, border);
+
                 canvas.drawRect(x + 2, y + 2, x + width -1, y + height - 1, border);
                 if (color == Card.RED) {
                     canvas.drawText(name, x + 10, y - fontOffset, textRed);
@@ -180,48 +191,47 @@ public class Card {
                         x,
                         y,
                         paint);
+                canvas.drawRect(x, y, x + width, y + height, border);
             }
+//        canvas.rotate(-rotation);
     }
 
-    public void update() {
-        updatePosition();
+    public void update(float deltaTime) {
+        updatePosition(deltaTime);
         if (next != null) {
-            next.update();
+            next.update(deltaTime);
+        }
+    }
+
+    private void move (float deltaTime) {
+        if ((int)targetX != (int)x || (int)targetY != (int)y) {
+            float deltaY = targetY - y;
+            float deltaX = targetX - x;
+            float distance = (float)Math.sqrt((deltaX*deltaX) + (deltaY*deltaY));
+            deltaX /= distance;
+            deltaY /= distance;
+            x  += Math.min(Math.abs(targetX - x), speed * deltaX * deltaTime);
+            y += Math.min(Math.abs(targetY - y), speed * deltaY * deltaTime);
+            GameView.updateList.add(this);
         }
     }
 
     private float xSpeed, ySpeed;
-    private void updatePosition() {
+    private void updatePosition(float deltaTime) {
         if (parent != null) {
-            if (!revealed) {
-                x = parent.getX() + (float)(offsetX * 0.5);
-                y = parent.getY() + (float)(offsetY * 0.5);
+            if (!revealed || !parent.isRevealed()) {
+                targetX = parent.getX() + (float)(offsetX * 0.5);
+                targetY = parent.getY() + (float)(offsetY * 0.5);
             } else {
-                x = parent.getX() + offsetX;
-                y = parent.getY() + offsetY;
+                targetX = parent.getX() + offsetX;
+                targetY = parent.getY() + offsetY;
             }
-
+            move(deltaTime);
         } else if (cardStack != null){
             targetX = cardStack.getX();
             targetY = cardStack.getY();
+            move(deltaTime);
 
-            if ((int)targetX != (int)x || (int)targetY != (int)y) {
-                xSpeed = Math.min(Math.abs(targetX-x), speed);
-                ySpeed = Math.min(Math.abs(targetY-y), speed);
-
-                if (x > targetX) {
-                    xSpeed *= -1;
-                }
-
-                if (y > targetY) {
-                    ySpeed *= -1;
-                }
-
-                x += xSpeed;
-                y += ySpeed;
-
-                GameView.updateList.add(this);
-            }
         }
     }
 
@@ -288,10 +298,17 @@ public class Card {
         this.offsetX = x;
         this.offsetY = y;
     }
+
+    public void setTarget (int x, int y) {
+        this.targetX = x;
+        this.targetY = y;
+        scheduleUpdate();
+    }
+
     public void setPosition(int x, int y) {
         this.x = x;
         this.y = y;
-        update();
+        scheduleUpdate();
     }
     public void setRevealed(boolean revealed) {
         this.revealed = revealed;
@@ -299,4 +316,9 @@ public class Card {
     public void setStack(CardStack stack) {this.cardStack = stack;}
     public CardStack getStack() {return cardStack;}
     public boolean isRevealed() {return revealed;}
+
+    public void scheduleUpdate() {
+        if (!GameView.updateList.contains(this))
+            GameView.updateList.add(this);
+    }
 }

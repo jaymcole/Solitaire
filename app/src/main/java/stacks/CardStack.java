@@ -1,14 +1,16 @@
 package stacks;
 
+import android.content.Context;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
 import android.graphics.Paint;
-import android.graphics.Rect;
 import android.graphics.RectF;
-import android.util.Log;
 
 import java.util.ArrayList;
 
 import jasoncole.solitaire.Card;
+import jasoncole.solitaire.GameView;
 
 /**
  * Created by Jason Cole on 7/15/2018.
@@ -23,6 +25,14 @@ public abstract class CardStack {
     protected int x, y;
     protected RectF bounds;
 
+    protected static Bitmap placeholder;
+    protected static Paint paint;
+
+    public static void init(Context context) {
+        paint = new Paint();
+        placeholder = BitmapFactory.decodeResource(context.getResources(), GameView.placeholder_resource);
+        placeholder = Bitmap.createScaledBitmap(placeholder, (int)Card.width, (int)Card.height, false);
+    }
 
     public CardStack(int x, int y) {
         this.x = x;
@@ -123,7 +133,7 @@ public abstract class CardStack {
         }
         tail.setNext(null);
         updateCardStack(head);
-        head.update();
+        head.scheduleUpdate();
 
     }
 
@@ -152,7 +162,7 @@ public abstract class CardStack {
         tail.setNext(null);
 
         updateCardStack(head);
-        head.update();
+        head.scheduleUpdate();
     }
 
     public void updateStack() {
@@ -174,18 +184,21 @@ public abstract class CardStack {
         updateCardStack(card.getNext());
     }
 
+    public void render (Canvas canvas) {
+//        canvas.drawRoundRect(bounds, 3, 3, paint);
+        canvas.drawBitmap(placeholder, x, y, paint);
+    }
+
     /**
      * Renders this stack
      * @param canvas
      * @param paint
      */
-    public void render(Canvas canvas, Paint paint) {
-//        canvas.drawRect(x, y, x + Card.width, y+ Card.height, paint);
-        canvas.drawRoundRect(bounds, 3, 3, paint);
-        canvas.drawText(this.TAG, x, y + Card.height / 2, paint);
+    public void renderStack(Canvas canvas, Paint paint) {
+
         if (head != null) {
             head.renderStack(canvas, paint);
-            canvas.drawText( countStack(head) + "", x, y + 30, paint);
+//            canvas.drawText( countStack(head) + "", x, y + 30, paint);
         }
     }
 
@@ -214,7 +227,6 @@ public abstract class CardStack {
         Card card = head;
         head = null;
         tail = null;
-
         return card;
     }
 

@@ -20,6 +20,8 @@ public class Waste extends CardStack {
 
     @Override
     public boolean validStack(Card card) {
+        if (card == null)
+            return false;
         if (!card.hasNext())
             return true;
         if (card.getNext().getValue() == card.getValue() - 1)

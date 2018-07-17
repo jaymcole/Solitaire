@@ -22,6 +22,11 @@ public class Stock extends CardStack {
 
     @Override
     public Card pickup(int x, int y) {
+        drawHand();
+        return null;
+    }
+
+    public void drawHand() {
         discard.addCardToTop(waste.emptyStack());
         if (head == null) {
             this.addCardToBottom(discard.emptyStack());
@@ -35,12 +40,8 @@ public class Stock extends CardStack {
                 remove(tail);
                 card.setRevealed(true);
                 waste.addCardToTop(card);
-//                setRevealed(waste.getHead(), true);
-
             }
         }
-
-        return null;
     }
 
     @Override

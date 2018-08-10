@@ -1,9 +1,11 @@
 package stacks;
 
+import android.graphics.Canvas;
+
 import jasoncole.solitaire.Card;
 
 /**
- * Created by SYSTEM on 7/15/2018.
+ * Created by Jason Cole on 7/15/2018.
  */
 
 public class Stock extends CardStack {
@@ -16,8 +18,9 @@ public class Stock extends CardStack {
 
         super(x, y);
         this.waste = (Waste)waste;
-        discard = new Waste(-1000, -1000, 0, 0);
+//        discard = new Waste(-1000, -1000, 0, 0);
     }
+
 
 
     @Override
@@ -26,18 +29,27 @@ public class Stock extends CardStack {
         return null;
     }
 
+    @Override
+    protected boolean validPickup(Card card) {
+        return false;
+    }
+
+    @Override
+    public void render(Canvas canvas) {
+        canvas.drawCircle(x + (Card.width * 0.5f), y + (Card.height * 0.5f), (Card.width * 0.3f), placeholderPaint);
+    }
+
     public void drawHand() {
-        discard.addCardToTop(waste.emptyStack());
-        if (head == null) {
-            this.addCardToBottom(discard.emptyStack());
-            setRevealed(head, false);
+        if (head() == null) {
+            waste.emptyStackToBottom(this);
+            this.setRevealedStatus(false);
 
         } else {
             for(int i = 0; i < waste.getMaxCards(); i++) {
-                Card card = tail;
+                Card card = tail();
                 if (card == null)
                     break;
-                remove(tail);
+                remove(card);
                 card.setRevealed(true);
                 waste.addCardToTop(card);
             }
@@ -47,5 +59,9 @@ public class Stock extends CardStack {
     @Override
     protected boolean validDrop(Card card) {
         return false;
+    }
+
+    public Waste getDiscard() {
+        return discard;
     }
 }

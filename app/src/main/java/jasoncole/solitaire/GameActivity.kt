@@ -2,6 +2,7 @@ package jasoncole.solitaire
 
 import android.os.Bundle
 import android.support.v7.app.AppCompatActivity
+import gameViews.Klondike
 
 
 /**
@@ -12,12 +13,12 @@ import android.support.v7.app.AppCompatActivity
 class GameActivity : AppCompatActivity() {
 
     //declaring gameview
-    private var gameView: GameView? = null
+    private var gameView: Klondike? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         //Initializing game view object
-        gameView = GameView(this)
+        gameView = Klondike(this)
 
         //adding it to contentview
         setContentView(gameView)

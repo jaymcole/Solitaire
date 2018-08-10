@@ -9,6 +9,9 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.util.Log;
 
+import java.util.Random;
+
+import gameViews.GameView;
 import stacks.CardStack;
 
 
@@ -17,48 +20,101 @@ import stacks.CardStack;
  */
 
 public class Card {
-    public String debug_name = "unnamed";
-    private String name;
 
-    private float targetX, targetY;
-    private static float speed = 2500;
-//    private float rotation = 0;
+    public static final String TAG = "Card";
+
+    private String name;
 
     public static final int BLACK = 0;
     public static final int RED = 1;
 
-    private static Bitmap front, back;
+    private static Bitmap back;
+    private Bitmap localFront;
 
     private Suit suit;
     private int color;
     private int number;
 
-    private float x, y;
-    public static float width = 5, height = 5;
+    private boolean gameOverPartyTime = false;
+    private static final Random random = new Random();
 
-    private float offsetX, offsetY;
-    private Card parent, next;
+    /**
+     * initial gameover trajectory vectors
+     */
+    private float goY, goX;
+
+    /**
+     * The current x and y position of this card.
+     */
+    private float
+            x,
+            y;
+
+    /**
+     * The screen coordinates this card should be moving towards.
+     */
+    private float
+            targetX,
+            targetY;
+
+    /**
+     * The speed Cards should move at.
+     */
+    private static float speed = 2500;
+
+    /**
+     * The CardStack this card is a part of.
+     */
     private CardStack cardStack;
 
+    /**
+     * Renders face up if revealed == true
+     *          - face down if revealed == false.
+     */
     private boolean revealed;
 
+    /**
+     * Various dimensions/settings shared among all cards.
+     */
+    public static float
+            width,
+            height,
+            frontInset,
+            backInset,
+            cornerRoundness;
 
-    private static Paint background, border, textRed, textBlack;
+    /**
+     * Various render settings shared among all cards.
+     */
+    private static Paint
+            background,
+            outerBorder,
+            border,
+            numberRed,
+            symbolRed,
+            numberBlack,
+            symbolBlack;
 
     private static int fontOffset;
+    private static int symbolOffset;
+    private float numberLength;
 
+
+    /**
+     * Initials settings shared among all cards.
+     * @param context
+     */
     public static void initCards(Context context) {
-        width = Resources.getSystem().getDisplayMetrics().widthPixels / 8;
-        height = Resources.getSystem().getDisplayMetrics().heightPixels / 4;
+        int fontSize = 45;
+        numberBlack = new Paint();
+        numberBlack.setTextSize(fontSize);
+        symbolBlack = new Paint(numberBlack);
+        symbolBlack.setTextSize(fontSize / 2);
 
-        front = BitmapFactory.decodeResource(context.getResources(), GameView.card_front_resource);
-        float ratio = width / front.getWidth();
-        width = front.getWidth() * ratio;
-        height = front.getHeight() * ratio;
-        front = Bitmap.createScaledBitmap(front, (int)(width), (int)(height), false);
-
-        back = BitmapFactory.decodeResource(context.getResources(), GameView.card_back_resource);
-        back = Bitmap.createScaledBitmap(back, (int)(width), (int)(height), false);
+        numberRed = new Paint(numberBlack);
+        numberRed.setColor(Color.RED);
+        symbolRed = new Paint(numberRed);
+        symbolRed .setTextSize(fontSize / 2);
 
         background = new Paint();
         background.setColor(Color.WHITE);
@@ -66,33 +122,53 @@ public class Card {
         border = new Paint();
         border.setColor(Color.BLACK);
         border.setStyle(Paint.Style.STROKE);
+        border.setStrokeWidth(3);
 
+        outerBorder = new Paint(border);
+        outerBorder.setColor(Color.argb(100,100,100,100));
+        outerBorder.setStrokeWidth(2);
 
-        textBlack = new Paint();
-        textBlack.setTextSize(60);
+        fontOffset = (int) numberBlack.getFontMetrics().top;
+        symbolOffset =  (int)(fontOffset * 1.5f);
 
-        textRed = new Paint(textBlack);
-        textRed.setColor(Color.RED);
+        width = Resources.getSystem().getDisplayMetrics().widthPixels / 8;
+        height = width * 1.4f;
 
-        fontOffset = (int)textBlack.getFontMetrics().top;
+        frontInset = width * 0.2f;
+        cornerRoundness = width * 0.03f;
+        backInset = frontInset * 0.5f;
+
+//        front = BitmapFactory.decodeResource(context.getResources(), Klondike_Old.card_front_resource);
+//        front = Bitmap.createScaledBitmap(front, (int)(width - (frontInset *2)), (int)(height - (frontInset *2)), true);
+
+        back = BitmapFactory.decodeResource(context.getResources(), GameView.card_back_resource);
+
+        if (back == null)
+            Log.d("ass", "Back is nmull.");
+
+        back = Bitmap.createScaledBitmap(back, (int)(width - (backInset*2)), (int)(height - (backInset *2)), true);
+
+        Card.setCardBack(context, GameView.card_back_resource);
+
 
     }
 
-
     public Card(int color, int number, Suit suit) {
+        numberLength = (Math.abs(numberBlack.measureText("" + number) - numberBlack.measureText(getCharacterRepresentation(number))) * 0.5f);
         this.color = color;
         this.number = number;
         this.suit = suit;
-        this.next = null;
-
         revealed = false;
-        offsetX = 0;
-        offsetY = 0;
-        x = 0;
-        y = 0;
-        debug_name = getColorName() + " " + getValue() + " of " + getSuit();
         name = suit.getCharacter() + "" + getCharacterRepresentation(number);
+        localFront = generateFront();
+        setPosition((int)-width, (int)-height);
+        goX = (random.nextInt(10) * 0.01f + 0.1f) * speed * 0.5f;
+        goY = random.nextFloat() * speed * -0.01f + 0.1f;
+        if (random.nextBoolean())
+            goX *= -1;
+//        isMoving = false;
     }
+
 
     /**
      *
@@ -119,7 +195,7 @@ public class Card {
      * @param resource
      */
     public static void setCardFront (Context context, int resource) {
-        front = BitmapFactory.decodeResource(context.getResources(), resource);
+//        front = BitmapFactory.decodeResource(context.getResources(), resource);
     }
 
     /**
@@ -129,18 +205,74 @@ public class Card {
      * @param resource
      */
     public static void setCardBack (Context context, int resource) {
-        back = BitmapFactory.decodeResource(context.getResources(), resource);
+        Bitmap.Config conf = Bitmap.Config.ARGB_8888; // see other conf types
+        Bitmap bmp = Bitmap.createBitmap((int)width, (int)height, conf); // this creates a MUTABLE bitmap
+        Canvas canvas = new Canvas(bmp);
+
+
+        canvas.drawRoundRect(0, 0, width, height, cornerRoundness, cornerRoundness, background);
+        canvas.drawRoundRect(0, 0, width, height, cornerRoundness, cornerRoundness, outerBorder);
+
+        canvas.drawBitmap(
+                back,
+                backInset,
+                backInset,
+                background);
+        canvas.drawRect(backInset, backInset, (width-(backInset)), (height-(backInset)), border);
+        back = bmp;
     }
 
+    /**
+     * Generates a card face for this specific card;
+     * @return a bitmap unique for this card.
+     */
+    private Bitmap generateFront() {
+        Bitmap.Config conf = Bitmap.Config.ARGB_8888; // see other conf types
+        Bitmap bmp = Bitmap.createBitmap((int)width, (int)height, conf); // this creates a MUTABLE bitmap
+        Canvas canvas = new Canvas(bmp);
 
 
-    public String getColorName() {
-        if (color == Card.RED)
-            return "Red";
-        else
-            return "Black";
+
+        canvas.drawRoundRect(x, y, x + width, y + height, cornerRoundness, cornerRoundness, background);
+        canvas.drawRoundRect(x, y, x + width, y + height, cornerRoundness, cornerRoundness, outerBorder);
+//        canvas.drawBitmap(
+//                localFront,
+//                x + frontInset,
+//                y + frontInset,
+//                background);
+
+        canvas.drawRect(x + frontInset, y + frontInset, x + (width-(frontInset)), y + (height-(frontInset)), border);
+        if (color == Card.RED) {
+            paintCharacters(canvas, numberRed, symbolRed);
+        } else {
+            paintCharacters(canvas, numberBlack, symbolBlack);
+        }
+        return bmp;
     }
 
+    /**
+     *  Paints the card value and suit onto canvas
+     * @param canvas
+     * @param numberPaint
+     * @param symbolPaint
+     */
+    private void paintCharacters(Canvas canvas, Paint numberPaint, Paint symbolPaint) {
+        canvas.drawText(Card.getCharacterRepresentation(number), x + 10, y - fontOffset, numberPaint);
+        canvas.drawText(suit.getCharacter(), x + numberLength + 10, y - (symbolOffset), symbolPaint);
+
+        canvas.translate(x + width , y + height);
+        canvas.rotate(180);
+        canvas.drawText(Card.getCharacterRepresentation(number), x + 10, y - fontOffset, numberPaint);
+        canvas.drawText(suit.getCharacter(), x + numberLength + 10, y - (symbolOffset), symbolPaint);
+
+    }
+
+    /**
+     *
+     * @param number
+     * @return the playing representation for number.
+     *      Example: 13 returns K since king has a value of 13.
+     */
     public static String getCharacterRepresentation (int number) {
         switch (number) {
             case 1:
@@ -153,56 +285,81 @@ public class Card {
                 return "K";
             default:
                 return number + "";
-    }
-}
-
-//    public void setRot(float rot) {
-//        rotation = rot;
-//    }
-
-    public void renderStack(Canvas canvas, Paint paint) {
-        render(canvas, paint);
-        if (next != null)
-            next.renderStack(canvas, paint);
-    }
-
-    public void render(Canvas canvas, Paint paint) {
-//        canvas.rotate(rotation);
-            if (revealed) {
-
-
-                canvas.drawRect(x, y, x + width, y + height, background);
-                canvas.drawBitmap(
-                        front,
-                        x,
-                        y,
-                        paint);
-                canvas.drawRect(x, y, x + width, y + height, border);
-
-                canvas.drawRect(x + 2, y + 2, x + width -1, y + height - 1, border);
-                if (color == Card.RED) {
-                    canvas.drawText(name, x + 10, y - fontOffset, textRed);
-                } else {
-                    canvas.drawText(name, x + 10, y - fontOffset, textBlack);
-                }
-            } else {
-                canvas.drawBitmap(
-                        back,
-                        x,
-                        y,
-                        paint);
-                canvas.drawRect(x, y, x + width, y + height, border);
-            }
-//        canvas.rotate(-rotation);
-    }
-
-    public void update(float deltaTime) {
-        updatePosition(deltaTime);
-        if (next != null) {
-            next.update(deltaTime);
         }
     }
 
+    //TODO: if background renders correctly, refactor the name to "cardPaint"
+
+    /**
+     * Renders only this card to canvas.
+     *      - canvas must not be null.
+     * @param canvas - The canvas to render this card to
+     */
+    public void render(Canvas canvas) {
+        if (revealed) {
+            canvas.drawBitmap(
+                    localFront,
+                    x,
+                    y,
+                    background);
+        } else {
+            canvas.drawBitmap(
+                    back,
+                    x,
+                    y,
+                    background);
+        }
+    }
+
+    /**
+     * Updates this card.
+     *      deltaTime is the time since the last frame.
+     * @param deltaTime : time since the last frame.
+     */
+    public void update(float deltaTime) {
+        if (gameOverPartyTime) {
+            gameOverUpdate(deltaTime);
+        }else{
+            scheduleUpdate();
+            move(deltaTime);
+        }
+    }
+
+    private void gameOverUpdate(float deltaTime) {
+        x += goX * deltaTime;
+        goY += (9.8f * deltaTime);
+        y += goY;
+
+        if (x > GameView.screenWidth - Card.width) {
+            goX *= -1;
+            x = GameView.screenWidth - Card.width;
+//            goY *= 0.85f;
+        }
+
+        if (y > GameView.screenHeight - Card.height) {
+            goY *= -1;
+            y = GameView.screenHeight - Card.height;
+            goY *= 0.85f;
+        }
+
+        if (x < -Card.width) {
+//            this.setPosition(cardStack.getX(), cardStack.getY());
+            updateComplete();
+        }
+
+    }
+
+    private boolean doneUpdating;
+    public boolean isDoneUpdating() {return doneUpdating;}
+    private void updateComplete() {
+        doneUpdating = true;
+    }
+
+    /**
+     * Moves this card toward it's target destination.
+     *      - Pixels moved is dependant on deltaTime.
+     * @param deltaTime : time since the last frame.
+     */
     private void move (float deltaTime) {
         if ((int)targetX != (int)x || (int)targetY != (int)y) {
             float deltaY = targetY - y;
@@ -210,37 +367,33 @@ public class Card {
             float distance = (float)Math.sqrt((deltaX*deltaX) + (deltaY*deltaY));
             deltaX /= distance;
             deltaY /= distance;
-            x  += Math.min(Math.abs(targetX - x), speed * deltaX * deltaTime);
-            y += Math.min(Math.abs(targetY - y), speed * deltaY * deltaTime);
-            GameView.updateList.add(this);
+
+            if (x < targetX)
+                x += Math.min(targetX - x, speed * deltaX * deltaTime);
+            else
+                x += Math.max(targetX - x, speed * deltaX * deltaTime);
+
+
+            if (y < targetY)
+                y += Math.min(targetY - y, speed * deltaY * deltaTime);
+            else
+                y += Math.max(targetY - y, speed * deltaY * deltaTime);
+        } else {
+            updateComplete();
         }
     }
 
-    private float xSpeed, ySpeed;
-    private void updatePosition(float deltaTime) {
-        if (parent != null) {
-            if (!revealed || !parent.isRevealed()) {
-                targetX = parent.getX() + (float)(offsetX * 0.5);
-                targetY = parent.getY() + (float)(offsetY * 0.5);
-            } else {
-                targetX = parent.getX() + offsetX;
-                targetY = parent.getY() + offsetY;
-            }
-            move(deltaTime);
-        } else if (cardStack != null){
-            targetX = cardStack.getX();
-            targetY = cardStack.getY();
-            move(deltaTime);
-
-        }
-    }
-
-    public void poke() {
+    //TODO: Score needs to change depending on the gamemode.
+    public int poke() {
         if (!isRevealed()) {
-            if (this.next == null) {
+            if (cardStack.getNext(this) == null) {
                 this.revealed = true;
+//                GameView.OnCardFlip(getStack(), this);
+//                return Klondike.VALUE_FOR_TURNING_OVER_TABLEAU;
             }
+
         }
+        return 0;
     }
 
     @Override
@@ -259,66 +412,69 @@ public class Card {
                 && this.color == card.color;
     }
 
-    public void setNext(Card card) {
-        if (card != null)
-            card.setParent(this);
-        next = card;
-    }
 
     public Card getNext() {
-        return next;
+        return cardStack.getNext(this);
     }
 
-    public boolean hasNext() {
-        return next != null;
-    }
 
     public int getValue() {
         return number;
     }
+
     public String getName() {return name;}
-    public void setParent(Card card) {
-        this.parent = card;
-    }
-    public Card getParent() {
-        return parent;
-    }
+
     public float getX() {
         return x;
     }
+
     public float getY() {
         return y;
     }
+
     public float getWidth() {return width;}
+
     public float getHeight() {return height;}
+
     public Suit getSuit() {
         return suit;
     }
-    public void setOffsets(float x, float y) {
-        this.offsetX = x;
-        this.offsetY = y;
-    }
 
     public void setTarget (int x, int y) {
+        scheduleUpdate();
         this.targetX = x;
         this.targetY = y;
-        scheduleUpdate();
+        doneUpdating = false;
     }
 
     public void setPosition(int x, int y) {
         this.x = x;
         this.y = y;
-        scheduleUpdate();
     }
+
+    public boolean hasNext() {
+        if (cardStack.tail() == null)
+            return false;
+        else if (cardStack.tail() == this)
+            return false;
+        return true;
+    }
+
     public void setRevealed(boolean revealed) {
         this.revealed = revealed;
     }
     public void setStack(CardStack stack) {this.cardStack = stack;}
+
     public CardStack getStack() {return cardStack;}
     public boolean isRevealed() {return revealed;}
 
+    public void setGameOverPartyTime(boolean status) {
+        gameOverPartyTime = status;
+    }
+
     public void scheduleUpdate() {
-        if (!GameView.updateList.contains(this))
-            GameView.updateList.add(this);
+        if (doneUpdating)
+            return;
+        GameView.scheduleUpdate(this);
     }
 }

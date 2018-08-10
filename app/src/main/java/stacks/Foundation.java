@@ -33,7 +33,7 @@ public class Foundation extends CardStack{
     protected boolean validDrop(Card card) {
         if (!validStack(card))
             return false;
-        if (isEmpty()) {
+        if (cards.isEmpty()) {
             if (card.getValue() == 1 ) {
                 suit = card.getSuit();
                 return true;
@@ -45,7 +45,7 @@ public class Foundation extends CardStack{
 
 
 
-        if (tail.getValue() == card.getValue() - 1)
+        if (tail().getValue() == card.getValue() - 1)
             return true;
 
         return false;

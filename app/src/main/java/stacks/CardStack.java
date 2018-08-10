@@ -4,13 +4,15 @@ import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Canvas;
+import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.RectF;
+import android.util.Log;
 
 import java.util.ArrayList;
 
+import gameViews.GameView;
 import jasoncole.solitaire.Card;
-import jasoncole.solitaire.GameView;
 
 /**
  * Created by Jason Cole on 7/15/2018.
@@ -20,7 +22,6 @@ public abstract class CardStack {
 
     public final String TAG = "Empty";
 
-    protected Card head = null, tail = null;
     protected int childOffsetX, childOffsetY;
     protected int x, y;
     protected RectF bounds;
@@ -28,10 +29,21 @@ public abstract class CardStack {
     protected static Bitmap placeholder;
     protected static Paint paint;
 
+    protected static Paint placeholderPaint;
+
+    protected ArrayList<Card> cards;
+
     public static void init(Context context) {
         paint = new Paint();
         placeholder = BitmapFactory.decodeResource(context.getResources(), GameView.placeholder_resource);
-        placeholder = Bitmap.createScaledBitmap(placeholder, (int)Card.width, (int)Card.height, false);
+        placeholder = Bitmap.createScaledBitmap(placeholder, (int) Card.width, (int) Card.height, false);
+
+        placeholderPaint = new Paint();
+        int temp = Color.argb(100, 255,255,255);
+        placeholderPaint.setColor(temp);
+        placeholderPaint.setStyle(Paint.Style.STROKE);
+        placeholderPaint.setStrokeWidth(5);
+
     }
 
     public CardStack(int x, int y) {
@@ -39,68 +51,97 @@ public abstract class CardStack {
         this.y = y;
         this.childOffsetX = 0;
         this.childOffsetY = 0;
-        head = null;
-        tail = null;
         initBounds();
+        cards = new ArrayList<Card>();
+
     }
 
     public CardStack(int x, int y, int offsetX, int offsetY) {
         this.x = x;
         this.y = y;
-        head = null;
-        tail = null;
         this.childOffsetX = offsetX;
         this.childOffsetY = offsetY;
         initBounds();
+        cards = new ArrayList<Card>();
+
     }
+
+    protected void update() {}
 
     public boolean drop (Card card) {
-        return validDrop(card);
+        if (validDrop(card)) {
+            card.getStack().remove(card);
+//            cards.add(card);
+            this.addCardToTop(card);
+            return true;
+        }
+        return false;
     }
+
+    /**
+     * Checks if dropping card onto the top of this stack is valid. Changes depending on the stack type and game being played.
+     * @param card - The card being droppped onto this stack.
+     * @return True if drop is legal.
+     */
+    protected abstract boolean validDrop(Card card);
 
     public Card pickup(int x, int y) {
-        if (head == null)
-            return null;
-
-        Card temp = head;
-        Card card = head.inBounds(x, y) ? head : null;
-        while (temp != null) {
-            if (temp.inBounds(x, y)) {
-                card = temp;
+        Card card = null;
+        for (int i = cards.size()-1; i >= 0; i--) {
+            card = cards.get(i);
+            if (card.inBounds(x, y)) {
+                if (this.validStack(card))
+                    return card;
+                return null;
             }
-            temp = temp.getNext();
         }
-
-        if (validPickup(card)) {
-            card.poke();
-            return card;
-        } else
-            return null;
+        return null;
     }
 
-    protected boolean validDrop(Card card) {
-        return false;
-    }
-
-    protected boolean validPickup(Card card) {
-        return false;
-    }
+    protected abstract boolean validPickup(Card card);
 
     public boolean validStack (Card card) {
-        if (card == null)
-            return false;
-        if (!card.hasNext())
-            return true;
-        if (!card.isRevealed())
-            return false;
-        if (card.getNext().getValue() == card.getValue() - 1)
-            return validStack(card.getNext());
         return false;
     }
+
+    public void giveCardsStartingAt(CardStack stack, Card card) {
+        int index = cards.indexOf(card);
+        if (index == -1)
+            return;
+        while (index < cards.size()) {
+            Card c = cards.get(index);
+            this.remove(index);
+            stack.addCardToTop(c);
+        }
+    }
+
 
     protected void initBounds() {
         bounds = new RectF(x, y, x + Card.width, y + Card.height);
     }
+
+    /**
+     *
+     * @return the bounds of this stack.
+     *          Note: Currently only works for stacks where the top-most card is lowest on the screen.
+     */
+    public RectF getBounds() {
+        if (cards.isEmpty())
+            bounds.set(x, y, x + Card.width, y + Card.height);
+        else {
+
+
+            for (int i = cards.size()-1; i >= 0; i--) {
+                Card topCard = cards.get(i);
+                if (topCard.isDoneUpdating()) {
+                    bounds.set(x, y, topCard.getX() + Card.width, topCard.getY() + Card.height);
+                    break;
+                }
+            }
+        }
+        return bounds;
+    }
+
 
     public boolean contains(int x, int y) {
         if (bounds == null)
@@ -108,33 +149,14 @@ public abstract class CardStack {
         return bounds.contains(x, y);
     }
 
-
-
-
      /**
      * Adds card to the top of this stack. (top = tail)
      * @param card
      */
     public void addCardToTop (Card card) {
-        if (card == null)
-            return;
-
-        card.setParent(null);
-        if (head == null) {
-            addCardToBottom(card);
-        }else if (tail == head) {
-            tail = card;
-            head.setNext(card);
-            tail = getEndOfStack(card);
-        } else {
-            Card bottom = getEndOfStack(card);
-            tail.setNext(card);
-            tail = bottom;
-        }
-        tail.setNext(null);
-        updateCardStack(head);
-        head.scheduleUpdate();
-
+        card.setStack(this);
+        cards.add(card);
+        updateStack();
     }
 
     /**
@@ -142,64 +164,68 @@ public abstract class CardStack {
      * @param card
      */
     public void addCardToBottom (Card card) {
-        if (card == null) {
+        card.setStack(this);
+        cards.add(0, card);
+        updateStack();
+    }
+
+    public void forceStackPosition() {
+        if (cards.isEmpty())
             return;
+
+        int offX = 0, offY = 0;
+        for (Card card : cards) {
+            card.setPosition(x + offX,y + offY);
+            card.setStack(this);
+            if (card.isRevealed()) {
+                offX += childOffsetX;
+                offY += childOffsetY;
+            } else {
+                offX += childOffsetX * 0.5f;
+                offY += childOffsetY * 0.5f;
+            }
+
         }
-
-        if (head == null) {
-            head = card;
-            head.setParent(null);
-            tail = getEndOfStack(head);
-        } else {
-            Card oldHead = head;
-            head = card;
-            head.setParent(null);
-            Card newBottom = getEndOfStack(head);
-            newBottom.setNext(oldHead);
-            oldHead.setParent(newBottom);
-
-        }
-        tail.setNext(null);
-
-        updateCardStack(head);
-        head.scheduleUpdate();
     }
 
     public void updateStack() {
-        if (head != null)
-            updateCardStack(head);
-    }
-
-    /**
-     * Fixes all cards in stack starting at card
-     *      - Ensures card.cardstack = this stack
-     *      - Ensures offsets are set correctly
-     * @param card - the card to start at
-     */
-    private void updateCardStack(Card card) {
-        if (card == null)
+        if (cards.isEmpty())
             return;
-        card.setOffsets(childOffsetX, childOffsetY);
-        card.setStack(this);
-        updateCardStack(card.getNext());
+
+        int offX = 0, offY = 0;
+        for (Card card : cards) {
+            card.setTarget(x + offX,y + offY);
+            card.setStack(this);
+            if (card.isRevealed()) {
+                offX += childOffsetX;
+                offY += childOffsetY;
+            } else {
+                offX += childOffsetX * 0.5f;
+                offY += childOffsetY * 0.5f;
+            }
+
+        }
     }
 
     public void render (Canvas canvas) {
-//        canvas.drawRoundRect(bounds, 3, 3, paint);
-        canvas.drawBitmap(placeholder, x, y, paint);
+        canvas.drawRoundRect(x, y, x + Card.width, y + Card.height, Card.cornerRoundness, Card.cornerRoundness, placeholderPaint);
     }
 
     /**
      * Renders this stack
      * @param canvas
-     * @param paint
      */
-    public void renderStack(Canvas canvas, Paint paint) {
-
-        if (head != null) {
-            head.renderStack(canvas, paint);
-//            canvas.drawText( countStack(head) + "", x, y + 30, paint);
+    public void renderStack(Canvas canvas) {
+        for (int i = 0; i < cards.size(); i++) {
+            cards.get(i).render(canvas);;
         }
+    }
+
+    public void remove(int cardIndex) {
+        if (cardIndex < 0 || cardIndex >= cards.size())
+            return;
+        cards.remove(cardIndex);
+        updateStack();
     }
 
     /**
@@ -207,28 +233,57 @@ public abstract class CardStack {
      * @param card
      */
     public void remove(Card card) {
-        if (card == null) {
-            return;
-        }
-        resetStack(card);
+        cards.remove(card);
+        updateStack();
+    }
 
-        if (card == head || card.getParent() == null) {
-            head = null;
-            tail = null;
-            card.setParent(null);
-        } else {
-            tail = card.getParent();
-            card.setParent(null);
-            tail.setNext(null);
+
+    public void emptyStackToTop(CardStack emptyTo) {
+        for(Card card : cards) {
+            emptyTo.addCardToTop(card);
+        }
+        cards.clear();
+    }
+
+    public void emptyStackToBottom(CardStack emptyTo) {
+         for(Card card : cards) {
+             emptyTo.addCardToBottom(card);
+         }
+        cards.clear();
+    }
+
+    /**
+     *
+     * @return the topmost card in this stack.
+     *          Returns null if the stack is empty.
+     */
+    public Card tail() {
+        if (cards.isEmpty())
+            return null;
+        return cards.get(cards.size()-1);
+    }
+
+    /**
+     *
+     * @return the bottom-most card in this stack.
+     *          Returns null if this stack is empty.
+     */
+    public Card head() {
+        if (cards.isEmpty())
+            return null;
+        return cards.get(0);
+    }
+
+    /**
+     * Sets all cards in this stack to revealed.
+     * @param revealed
+     */
+    protected void setRevealedStatus(boolean revealed) {
+        for (Card card : cards) {
+            card.setRevealed(revealed);
         }
     }
 
-    public Card emptyStack() {
-        Card card = head;
-        head = null;
-        tail = null;
-        return card;
-    }
 
     private void resetStack(Card card) {
         if (card != null) {
@@ -237,49 +292,39 @@ public abstract class CardStack {
         }
     }
 
-    public static Card getEndOfStack(Card card) {
-        if (card == null)
-            return null;
-        else if (!card.hasNext())
-            return card;
-        else
-            return getEndOfStack(card.getNext());
-    }
-
-    public static int countStack(Card card) {
-        if (card == null) {
-            return 0;
-        } else {
-            return 1 + countStack(card.getNext());
+    //TODO: finish this
+    public Card getNext(Card card) {
+        int index = cards.indexOf(card)+1;
+        if (index > -1 && index < cards.size()) {
+            return cards.get(index);
         }
-
+        return null;
     }
 
-
-    public static Card[] stackToArray(Card card) {
-        Card head = card;
-        ArrayList<Card> cards = new ArrayList<Card>();
-        while(head != null) {
-            cards.add(head);
-            head = head.getNext();
-        }
-        return cards.toArray(new Card[cards.size()]);
-    }
-
-    public static void setRevealed(Card card, boolean reveal) {
-        if (card == null)
+    public void pokeStack() {
+        if (cards.isEmpty())
             return;
-        card.setRevealed(reveal);
-        setRevealed(card.getNext(), reveal);
+        int last = cards.size() - 1;
+        if (last < cards.size())
+            cards.get(last).poke();
+    }
+
+    public int getChildOffsetX() {
+        return childOffsetX;
+    }
+
+    public int getChildOffsetY() {
+        return childOffsetY;
+    }
+
+    public int cardsInStack() {
+        if (cards.isEmpty())
+            return 0;
+        else
+            return cards.size();
     }
 
 
-
-    public boolean isEmpty() {return head == null;}
-    public Card getHead () {return head;}
-    public Card getTail () {return tail;}
     public int getX() {return x;}
     public int getY() {return y;}
-    public int getChildOffsetX() {return childOffsetX;}
-    public int getChildOffsetY() {return childOffsetY;}
 }
